@@ -1,0 +1,7 @@
+name = "zak-license"
+main = "worker.js"
+compatibility_date = "2024-06-01"
+
+[[kv_namespaces]]
+binding = "ZAK_LICENSES"
+id = "e85fdbe147374f8286d5f7df22844729"
