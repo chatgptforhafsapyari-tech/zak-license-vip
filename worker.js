@@ -1,331 +1,380 @@
-// language: JavaScript, file: worker.js
+// Cloudflare Worker — BGMI Lua License API + Admin Panel
+// Required KV binding variable: ZAK_LICENSES
+// Required Worker secret: ADMIN_SECRET
+//
+// Lua compatibility:
+// URL: /connect
+// POST form fields: game, user_key, serial
+// Response: { status: true, data: { token: <MD5>, rng: <unix seconds> } }
 
-const SECRET_KEY = "ZAKPUBGSKIN"; // Lua config wala secret
-const GAME_NAME = "BGMI";         // Lua config wala game
-const ADMIN_SECRET = "ZAKADMIN2026"; // Admin panel ka password
+const GAME_NAME = "BGMI";
+const LUA_SECRET = "ZAKPUBGSKIN";
+const KV_PREFIX = "key:";
 
-// ==========================================
-// 100% RELIABLE MD5 (Matches Lua Script)
-// ==========================================
-function md5(inputString) {
-    var hc="0123456789abcdef";
-    function rh(n) {var j,s="";for(j=0;j<=3;j++) s+=hc.charAt((n>>(j*8+4))&0x0F)+hc.charAt((n>>(j*8))&0x0F);return s;}
-    function ad(x,y) {var l=(x&0xFFFF)+(y&0xFFFF);var m=(x>>16)+(y>>16)+(l>>16);return (m<<16)|(l&0xFFFF);}
-    function rl(n,c) {return (n<<c)|(n>>>(32-c));}
-    function cm(q,a,b,x,s,t) {return ad(rl(ad(ad(a,q),ad(x,t)),s),b);}
-    function ff(a,b,c,d,x,s,t) {return cm((b&c)|((~b)&d),a,b,x,s,t);}
-    function gg(a,b,c,d,x,s,t) {return cm((b&d)|(c&(~d)),a,b,x,s,t);}
-    function hh(a,b,c,d,x,s,t) {return cm(b^c^d,a,b,x,s,t);}
-    function ii(a,b,c,d,x,s,t) {return cm(c^(b|(~d)),a,b,x,s,t);}
-    function sb(x) {var i;var nblk=((x.length+8)>>6)+1;var blks=new Array(nblk*16);for(i=0;i<nblk*16;i++) blks[i]=0;for(i=0;i<x.length;i++) blks[i>>2]|=x.charCodeAt(i)<<((i%4)*8);blks[i>>2]|=0x80<<((i%4)*8);blks[nblk*16-2]=x.length*8;return blks;}
-    function str2binb(str) {var bin=Array();var mask=(1<<8)-1;for(var i=0;i<str.length*8;i+=8) {bin[i>>5]|=(str.charCodeAt(i/8)&mask)<<(i%32);}return bin;}
-    var x=str2binb(inputString), a=1732584193, b=-271733879, c=-1732584194, d=271733878;
-    for(var i=0;i<x.length;i+=16) {
-        var olda=a, oldb=b, oldc=c, oldd=d;
-        a=ff(a,b,c,d,x[i+ 0],7,-680876936); d=ff(d,a,b,c,x[i+ 1],12,-389564586);
-        c=ff(c,d,a,b,x[i+ 2],17, 606105819); b=ff(b,c,d,a,x[i+ 3],22,-1044525330);
-        a=ff(a,b,c,d,x[i+ 4],7,-176418897); d=ff(d,a,b,c,x[i+ 5],12, 1200080426);
-        c=ff(c,d,a,b,x[i+ 6],17,-1473231341); b=ff(b,c,d,a,x[i+ 7],22, -45705983);
-        a=ff(a,b,c,d,x[i+ 8],7, 1770035416); d=ff(d,a,b,c,x[i+ 9],12,-1958414417);
-        c=ff(c,d,a,b,x[i+10],17,    -42063); b=ff(b,c,d,a,x[i+11],22,-1990404162);
-        a=ff(a,b,c,d,x[i+12],7, 1804603682); d=ff(d,a,b,c,x[i+13],12, -40341101);
-        c=ff(c,d,a,b,x[i+14],17,-1502002290); b=ff(b,c,d,a,x[i+15],22, 1236535329);
-        a=gg(a,b,c,d,x[i+ 1],5,-165796510); d=gg(d,a,b,c,x[i+ 6],9,-1069501632);
-        c=gg(c,d,a,b,x[i+11],14, 643717713); b=gg(b,c,d,a,x[i+ 0],20,-373897302);
-        a=gg(a,b,c,d,x[i+ 5],5,-701558691); d=gg(d,a,b,c,x[i+10],9,  38016083);
-        c=gg(c,d,a,b,x[i+15],14,-660478335); b=gg(b,c,d,a,x[i+ 4],20,-405537848);
-        a=gg(a,b,c,d,x[i+ 9],5, 568446438); d=gg(d,a,b,c,x[i+14],9,-1019803690);
-        c=gg(c,d,a,b,x[i+ 3],14,-187363961); b=gg(b,c,d,a,x[i+ 8],20, 1163531501);
-        a=gg(a,b,c,d,x[i+13],5,-1444681467); d=gg(d,a,b,c,x[i+ 2],9, -51403784);
-        c=gg(c,d,a,b,x[i+ 7],14, 1735328473); b=gg(b,c,d,a,x[i+12],20,-1926607734);
-        a=hh(a,b,c,d,x[i+ 5],4,-378558); d=hh(d,a,b,c,x[i+ 8],11,-2022574463);
-        c=hh(c,d,a,b,x[i+11],16, 1839030562); b=hh(b,c,d,a,x[i+14],23, -35309556);
-        a=hh(a,b,c,d,x[i+ 1],4,-1530992060); d=hh(d,a,b,c,x[i+ 4],11, 1272893353);
-        c=hh(c,d,a,b,x[i+ 7],16,-155497632); b=hh(b,c,d,a,x[i+10],23,-1094730640);
-        a=hh(a,b,c,d,x[i+13],4,  681279174); d=hh(d,a,b,c,x[i+ 0],11, -358537222);
-        c=hh(c,d,a,b,x[i+ 3],16, -722521979); b=hh(b,c,d,a,x[i+ 6],23,  76029189);
-        a=hh(a,b,c,d,x[i+ 9],4, -640364487); d=hh(d,a,b,c,x[i+12],11, -421815835);
-        c=hh(c,d,a,b,x[i+15],16, 530742520); b=hh(b,c,d,a,x[i+ 2],23, -995338651);
-        a=ii(a,b,c,d,x[i+ 0],6,-198630844); d=ii(d,a,b,c,x[i+ 7],10, 1126891415);
-        c=ii(c,d,a,b,x[i+14],15,-1416354905); b=ii(b,c,d,a,x[i+ 5],21, -57434055);
-        a=ii(a,b,c,d,x[i+12],6, 1700485571); d=ii(d,a,b,c,x[i+ 3],10,-1894986606);
-        c=ii(c,d,a,b,x[i+10],15,   -1051523); b=ii(b,c,d,a,x[i+ 1],21,-2054922799);
-        a=ii(a,b,c,d,x[i+ 8],6, 1873313359); d=ii(d,a,b,c,x[i+15],10, -30611744);
-        c=ii(c,d,a,b,x[i+ 6],15,-1560198380); b=ii(b,c,d,a,x[i+13],21, 1309151649);
-        a=ii(a,b,c,d,x[i+ 4],6,-145523070); d=ii(d,a,b,c,x[i+11],10,-1120210379);
-        c=ii(c,d,a,b,x[i+ 2],15,  718787259); b=ii(b,c,d,a,x[i+ 9],21,-343485551);
-        a=ad(a,olda); b=ad(b,oldb); c=ad(c,oldc); d=ad(d,oldd);
+const JSON_HEADERS = {
+  "Content-Type": "application/json; charset=utf-8",
+  "Cache-Control": "no-store"
+};
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
+}
+
+// MD5 implementation using little-endian 512-bit blocks.
+// Lua's input is ASCII in this protocol (game/key/serial/secret).
+function md5(input) {
+  const text = String(input);
+  const bytes = [];
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code > 0x7f) throw new Error("MD5 input must be ASCII");
+    bytes.push(code);
+  }
+
+  const bitLength = bytes.length * 8;
+  bytes.push(0x80);
+  while ((bytes.length % 64) !== 56) bytes.push(0);
+  const low = bitLength >>> 0;
+  const high = Math.floor(bitLength / 0x100000000) >>> 0;
+  for (let i = 0; i < 4; i++) bytes.push((low >>> (8 * i)) & 0xff);
+  for (let i = 0; i < 4; i++) bytes.push((high >>> (8 * i)) & 0xff);
+
+  const shifts = [
+    7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
+    5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
+    4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,
+    6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21
+  ];
+  const K = [];
+  for (let i = 0; i < 64; i++) {
+    K[i] = Math.floor(Math.abs(Math.sin(i + 1)) * 0x100000000) >>> 0;
+  }
+
+  let a0 = 0x67452301, b0 = 0xefcdab89;
+  let c0 = 0x98badcfe, d0 = 0x10325476;
+
+  function add32(x, y) { return (x + y) >>> 0; }
+  function rotl(x, n) { return ((x << n) | (x >>> (32 - n))) >>> 0; }
+
+  for (let offset = 0; offset < bytes.length; offset += 64) {
+    const M = new Array(16);
+    for (let j = 0; j < 16; j++) {
+      const p = offset + j * 4;
+      M[j] = (bytes[p] | (bytes[p + 1] << 8) |
+             (bytes[p + 2] << 16) | (bytes[p + 3] << 24)) >>> 0;
     }
-    return rh(a)+rh(b)+rh(c)+rh(d);
+
+    let A = a0, B = b0, C = c0, D = d0;
+    for (let i = 0; i < 64; i++) {
+      let F, g;
+      if (i < 16) {
+        F = (B & C) | (~B & D); g = i;
+      } else if (i < 32) {
+        F = (D & B) | (~D & C); g = (5 * i + 1) % 16;
+      } else if (i < 48) {
+        F = B ^ C ^ D; g = (3 * i + 5) % 16;
+      } else {
+        F = C ^ (B | ~D); g = (7 * i) % 16;
+      }
+      const nextD = D;
+      D = C;
+      C = B;
+      const sum = add32(add32(add32(A, F >>> 0), K[i]), M[g]);
+      B = add32(B, rotl(sum, shifts[i]));
+      A = nextD;
+    }
+
+    a0 = add32(a0, A);
+    b0 = add32(b0, B);
+    c0 = add32(c0, C);
+    d0 = add32(d0, D);
+  }
+
+  function hexLE(n) {
+    return [0, 8, 16, 24].map(s => ((n >>> s) & 255).toString(16).padStart(2, "0")).join("");
+  }
+  return hexLE(a0) + hexLE(b0) + hexLE(c0) + hexLE(d0);
 }
 
-// ==========================================
-// PREMIUM ADMIN PANEL HTML
-// ==========================================
-const ADMIN_HTML = `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ZAK License VIP</title>
+function randomKeyPart(length = 6) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => alphabet[b % alphabet.length]).join("");
+}
+
+function validKeyData(data) {
+  return data && typeof data === "object" &&
+    typeof data.key === "string" &&
+    Number.isFinite(data.expires_at) &&
+    Number.isInteger(data.max_devices) &&
+    Array.isArray(data.devices);
+}
+
+async function readKey(env, key) {
+  const raw = await env.ZAK_LICENSES.get(KV_PREFIX + key);
+  if (!raw) return null;
+  let data;
+  try { data = JSON.parse(raw); } catch { return null; }
+  return validKeyData(data) ? data : null;
+}
+
+function adminAuth(url, env) {
+  const expected = env.ADMIN_SECRET;
+  const supplied = url.searchParams.get("secret") || "";
+  return typeof expected === "string" && expected.length > 0 && supplied === expected;
+}
+
+const ADMIN_HTML = `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BGMI License Admin</title>
 <style>
-  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0a0a; color: #eee; margin: 0; padding: 20px; }
-  .container { max-width: 900px; margin: auto; }
-  h1 { color: #f5c518; text-align: center; text-shadow: 0 0 10px rgba(245,197,24,0.5); }
-  .card { background: #151515; border: 1px solid #333; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-  input, button, select { font-size: 16px; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: #fff; width: 100%; box-sizing: border-box; margin-bottom: 10px; outline: none; transition: 0.3s; }
-  input:focus { border-color: #f5c518; }
-  button { background: #f5c518; color: #000; font-weight: bold; border: 0; cursor: pointer; margin-top: 10px; }
-  button:hover { background: #e0b000; transform: scale(1.02); }
-  .row { display: flex; gap: 10px; }
-  .row > * { flex: 1; }
-  .key-list { margin-top: 20px; }
-  .key-item { background: #1a1a1a; border-left: 4px solid #f5c518; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px; }
-  .key-item.revoked { border-left-color: #ff3333; opacity: 0.7; }
-  .key-header { display: flex; justify-content: space-between; align-items: center; font-size: 18px; font-weight: bold; color: #f5c518; }
-  .key-details { font-size: 14px; color: #aaa; }
-  .actions { display: flex; gap: 8px; margin-top: 10px; }
-  .actions button { padding: 8px; font-size: 13px; margin: 0; }
-  .btn-danger { background: #ff3333; color: white; }
-  .btn-danger:hover { background: #cc0000; }
-  .btn-warning { background: #ff9900; color: white; }
-  .btn-warning:hover { background: #cc7a00; }
-  .hidden { display: none; }
-</style></head><body>
-<div class="container">
-  <h1>♛ ZAK LICENSE VIP ♛</h1>
-  
-  <div id="loginBox" class="card">
-    <h2>Admin Login</h2>
-    <input type="password" id="secret" placeholder="Enter Admin Secret">
-    <button onclick="login()">Unlock Panel</button>
-  </div>
-
-  <div id="panelBox" class="hidden">
-    <div class="card">
-      <h2>Generate New Key</h2>
-      <div class="row">
-        <input type="number" id="days" value="30" placeholder="Days">
-        <input type="number" id="maxDev" value="1" placeholder="Max Devices">
-      </div>
-      <button onclick="generate()">Generate Key</button>
-      <div id="genResult" style="color:#00ff00; margin-top:10px; font-weight:bold;"></div>
-    </div>
-
-    <div class="card">
-      <h2>Manage Keys</h2>
-      <button onclick="loadKeys()">Refresh List</button>
-      <div id="keyList" class="key-list"></div>
-    </div>
-  </div>
+*{box-sizing:border-box}body{margin:0;padding:22px;background:#090b10;color:#edf0f6;font:15px system-ui,Segoe UI,sans-serif}
+.wrap{max-width:900px;margin:auto}h1{text-align:center;color:#e8bd55;letter-spacing:1px}
+.card{background:#141821;border:1px solid #2b3240;border-radius:14px;padding:20px;margin:18px 0}
+input,button{width:100%;padding:12px;border-radius:9px;border:1px solid #394252;background:#0e121a;color:#fff;font-size:15px;margin:6px 0}
+button{background:#e8bd55;color:#111;border:0;font-weight:750;cursor:pointer}
+button:disabled{opacity:.5;cursor:wait}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.item{border:1px solid #343c4b;background:#10151e;padding:14px;border-radius:10px;margin:12px 0}
+.item.revoked{border-left:4px solid #e34d59}.item.active{border-left:4px solid #3abf85}
+.key{font-weight:800;color:#e8bd55;overflow-wrap:anywhere}.muted{color:#aab3c2;font-size:13px}
+.actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.actions button{font-size:13px;padding:9px}
+.danger{background:#d94c58;color:white}.warn{background:#d98a37;color:#111}
+#message{white-space:pre-wrap;color:#9fe0bd;margin-top:10px}
+@media(max-width:560px){body{padding:12px}.grid{grid-template-columns:1fr}.actions{grid-template-columns:1fr 1fr}}
+</style></head><body><main class="wrap">
+<h1>♛ BGMI LICENSE ADMIN ♛</h1>
+<section class="card" id="login">
+<h2>Admin Login</h2>
+<input id="secret" type="password" placeholder="Admin secret">
+<button id="loginBtn">Unlock panel</button>
+</section>
+<div id="panel" hidden>
+<section class="card">
+<h2>Generate license</h2>
+<div class="grid">
+<input id="days" type="number" min="1" max="3650" value="30" placeholder="Validity in days">
+<input id="max" type="number" min="1" max="20" value="1" placeholder="Maximum devices">
 </div>
-
+<button id="generateBtn">Generate key</button><div id="message"></div>
+</section>
+<section class="card"><h2>Manage licenses</h2>
+<button id="refreshBtn">Refresh list</button><div id="keys"></div>
+</section></div></main>
 <script>
-let adminSecret = "";
-
-function login() {
-  adminSecret = document.getElementById("secret").value;
-  if (!adminSecret) return alert("Enter secret");
-  localStorage.setItem("zak_admin", adminSecret);
-  document.getElementById("loginBox").classList.add("hidden");
-  document.getElementById("panelBox").classList.remove("hidden");
-  loadKeys();
+let adminSecret="";
+const $=id=>document.getElementById(id);
+async function api(action,params={}){
+ const u=new URL(location.href);u.search="";u.searchParams.set("action",action);u.searchParams.set("secret",adminSecret);
+ for(const [k,v] of Object.entries(params))u.searchParams.set(k,String(v));
+ const r=await fetch(u.toString(),{cache:"no-store"});
+ let d;try{d=await r.json()}catch{throw Error("Invalid server response")}
+ if(!r.ok||!d.success)throw Error(d.error||("HTTP "+r.status));return d;
 }
-
-async function api(action, params = "") {
-  const res = await fetch(\`?action=\${action}&secret=\${adminSecret}\${params}\`);
-  return await res.json();
-}
-
-async function generate() {
-  const days = document.getElementById("days").value;
-  const maxDev = document.getElementById("maxDev").value;
-  const res = await api("create", \`&days=\${days}&max=\${maxDev}\`);
-  if (res.success) {
-    document.getElementById("genResult").innerText = "✅ Key: " + res.key;
-    loadKeys();
-  } else {
-    document.getElementById("genResult").innerText = "❌ Error: " + res.error;
+function showError(e){$("message").textContent="Error: "+e.message}
+async function loadKeys(){
+ const box=$("keys");box.textContent="Loading...";
+ try{
+  const d=await api("list");box.textContent="";
+  if(!d.keys.length){box.textContent="No keys found.";return}
+  for(const k of d.keys){
+   const item=document.createElement("div");item.className="item "+(k.revoked?"revoked":"active");
+   const title=document.createElement("div");title.className="key";title.textContent=k.key;
+   const info=document.createElement("div");info.className="muted";
+   info.textContent=(k.revoked?"REVOKED":"ACTIVE")+" · Expires: "+new Date(k.expires_at*1000).toLocaleString()+" · Devices: "+k.devices.length+"/"+k.max_devices;
+   const actions=document.createElement("div");actions.className="actions";
+   const add=(label,act,cls)=>{const b=document.createElement("button");b.textContent=label;b.className=cls||"";b.onclick=()=>runAction(act,k.key);actions.appendChild(b)};
+   if(!k.revoked)add("Revoke","revoke","danger");
+   add("Reset devices","reset","warn");add("Delete","delete","danger");
+   item.append(title,info,actions);box.appendChild(item);
   }
+ }catch(e){box.textContent="Could not load keys: "+e.message}
 }
-
-async function loadKeys() {
-  const res = await api("list");
-  const box = document.getElementById("keyList");
-  box.innerHTML = "";
-  if (!res.success || !res.keys.length) {
-    box.innerHTML = "<p style='color:#aaa'>No keys found.</p>";
-    return;
-  }
-
-  res.keys.forEach(k => {
-    const isRevoked = k.revoked;
-    const expDate = new Date(k.expires_at * 1000).toLocaleString();
-    box.innerHTML += \`
-      <div class="key-item \${isRevoked ? 'revoked' : ''}">
-        <div class="key-header">
-          <span>\${k.key}</span>
-          <span style="color:\${isRevoked ? '#ff3333' : '#00ff00'}">\${isRevoked ? 'REVOKED' : 'ACTIVE'}</span>
-        </div>
-        <div class="key-details">
-          Expires: \${expDate}<br>
-          Devices: \${k.devices.length} / \${k.max_devices}
-        </div>
-        <div class="actions">
-          \${!isRevoked ? \`<button class="btn-danger" onclick="actionKey('revoke', '\${k.key}')">Revoke</button>\` : ''}
-          <button class="btn-warning" onclick="actionKey('reset', '\${k.key}')">Reset Devices</button>
-          <button class="btn-danger" onclick="actionKey('delete', '\${k.key}')">Delete</button>
-        </div>
-      </div>
-    \`;
-  });
+async function runAction(action,key){
+ if(!confirm("Are you sure you want to "+action+" this key?"))return;
+ try{await api(action,{key});await loadKeys()}catch(e){alert(e.message)}
 }
-
-async function actionKey(action, key) {
-  if (!confirm(\`Are you sure you want to \${action} this key?\`)) return;
-  const res = await api(action, \`&key=\${key}\`);
-  if (res.success) {
-    loadKeys();
-  } else {
-    alert(res.error);
-  }
-}
-
-const saved = localStorage.getItem("zak_admin");
-if (saved) {
-  document.getElementById("secret").value = saved;
-  login();
-}
+$("loginBtn").onclick=async()=>{
+ adminSecret=$("secret").value.trim();if(!adminSecret)return alert("Enter admin secret");
+ try{await api("list");$("login").hidden=true;$("panel").hidden=false;sessionStorage.setItem("bgmi_admin_secret",adminSecret);await loadKeys()}
+ catch(e){alert("Login failed: "+e.message)}
+};
+$("generateBtn").onclick=async()=>{
+ const days=Number($("days").value),max=Number($("max").value);
+ if(!Number.isInteger(days)||days<1||days>3650)return alert("Days must be 1–3650");
+ if(!Number.isInteger(max)||max<1||max>20)return alert("Devices must be 1–20");
+ try{const d=await api("create",{days,max});$("message").textContent="Generated: "+d.key;await loadKeys()}
+ catch(e){showError(e)}
+};
+$("refreshBtn").onclick=loadKeys;
+const saved=sessionStorage.getItem("bgmi_admin_secret");if(saved){$("secret").value=saved;$("loginBtn").click()}
 </script></body></html>`;
 
-// ==========================================
-// WORKER ROUTER (Lua + Admin)
-// ==========================================
+async function handleAdmin(request, env, url) {
+  const action = url.searchParams.get("action");
+
+  if (request.method === "GET" && !action) {
+    return new Response(ADMIN_HTML, {
+      headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" }
+    });
+  }
+
+  if (!adminAuth(url, env)) return json({ success: false, error: "Unauthorized" }, 401);
+
+  if (request.method !== "GET") return json({ success: false, error: "Method not allowed" }, 405);
+
+  if (action === "create") {
+    const days = Number.parseInt(url.searchParams.get("days") || "30", 10);
+    const maxDevices = Number.parseInt(url.searchParams.get("max") || "1", 10);
+    if (!Number.isInteger(days) || days < 1 || days > 3650 ||
+        !Number.isInteger(maxDevices) || maxDevices < 1 || maxDevices > 20) {
+      return json({ success: false, error: "Invalid days or max devices" }, 400);
+    }
+
+    let key;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      key = "ZAK-" + randomKeyPart(6) + "-" + randomKeyPart(6);
+      if (!(await env.ZAK_LICENSES.get(KV_PREFIX + key))) break;
+      key = null;
+    }
+    if (!key) return json({ success: false, error: "Could not generate a unique key" }, 500);
+
+    const data = {
+      key,
+      expires_at: Math.floor(Date.now() / 1000) + days * 86400,
+      max_devices: maxDevices,
+      devices: [],
+      revoked: false
+    };
+    await env.ZAK_LICENSES.put(KV_PREFIX + key, JSON.stringify(data));
+    return json({ success: true, key, expires_at: data.expires_at });
+  }
+
+  if (action === "list") {
+    const keys = [];
+    let cursor;
+    do {
+      const page = await env.ZAK_LICENSES.list({ prefix: KV_PREFIX, cursor, limit: 1000 });
+      for (const entry of page.keys) {
+        const raw = await env.ZAK_LICENSES.get(entry.name);
+        if (!raw) continue;
+        try {
+          const data = JSON.parse(raw);
+          if (validKeyData(data)) keys.push(data);
+        } catch {}
+      }
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor);
+    keys.sort((a, b) => b.expires_at - a.expires_at);
+    return json({ success: true, keys });
+  }
+
+  if (["revoke", "reset", "delete"].includes(action)) {
+    const key = (url.searchParams.get("key") || "").trim();
+    if (!key || key.length > 100) return json({ success: false, error: "Invalid key" }, 400);
+    const storageKey = KV_PREFIX + key;
+
+    if (action === "delete") {
+      const existing = await env.ZAK_LICENSES.get(storageKey);
+      if (!existing) return json({ success: false, error: "Key not found" }, 404);
+      await env.ZAK_LICENSES.delete(storageKey);
+      return json({ success: true });
+    }
+
+    const data = await readKey(env, key);
+    if (!data) return json({ success: false, error: "Key not found or damaged" }, 404);
+    if (action === "revoke") data.revoked = true;
+    if (action === "reset") data.devices = [];
+    await env.ZAK_LICENSES.put(storageKey, JSON.stringify(data));
+    return json({ success: true });
+  }
+
+  return json({ success: false, error: "Unknown action" }, 400);
+}
+
+async function handleLua(request, env) {
+  if (request.method !== "POST") return json({ status: false, reason: "Method not allowed" }, 405);
+
+  try {
+    const contentType = request.headers.get("content-type") || "";
+    let body = {};
+
+    if (contentType.includes("application/x-www-form-urlencoded") ||
+        contentType.includes("multipart/form-data")) {
+      const form = await request.formData();
+      for (const [key, value] of form.entries()) body[key] = String(value);
+    } else if (contentType.includes("application/json")) {
+      body = await request.json();
+    } else {
+      const raw = await request.text();
+      const form = new URLSearchParams(raw);
+      for (const [key, value] of form.entries()) body[key] = value;
+    }
+
+    const game = String(body.game || "");
+    const userKey = String(body.user_key || "").trim();
+    const serial = String(body.serial || "");
+
+    if (game !== GAME_NAME || !userKey || !serial || serial.length > 512) {
+      return json({ status: false, reason: "Missing or invalid fields" }, 400);
+    }
+
+    const keyData = await readKey(env, userKey);
+    if (!keyData) return json({ status: false, reason: "Invalid Key" }, 200);
+
+    const now = Math.floor(Date.now() / 1000);
+    if (keyData.revoked === true) return json({ status: false, reason: "Key Revoked" });
+    if (now >= keyData.expires_at) return json({ status: false, reason: "Key Expired" });
+
+    if (!keyData.devices.includes(serial)) {
+      if (keyData.devices.length >= keyData.max_devices) {
+        return json({ status: false, reason: "Max Devices Reached" });
+      }
+      keyData.devices.push(serial);
+      await env.ZAK_LICENSES.put(KV_PREFIX + userKey, JSON.stringify(keyData));
+    }
+
+    // Must match Lua exactly:
+    // md5(cfg.game .. '-' .. key .. '-' .. serial .. '-' .. cfg.secret)
+    const token = md5(game + "-" + userKey + "-" + serial + "-" + LUA_SECRET);
+
+    return json({
+      status: true,
+      data: {
+        token,
+        rng: now
+      }
+    });
+  } catch (error) {
+    return json({ status: false, reason: "Server error: " + String(error?.message || error) }, 500);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const action = url.searchParams.get("action");
-    const secret = url.searchParams.get("secret");
+    const path = url.pathname.replace(/\/+$/, "") || "/";
 
-    // --- 1. ADMIN PANEL ROUTES ---
-    if (request.method === "GET") {
-      if (!action) {
-        return new Response(ADMIN_HTML, { headers: { "Content-Type": "text/html" } });
-      }
-
-      if (secret !== ADMIN_SECRET) {
-        return new Response(JSON.stringify({ success: false, error: "Unauthorized" }), { status: 401 });
-      }
-
-      // Create Key
-      if (action === "create") {
-        const days = parseInt(url.searchParams.get("days")) || 30;
-        const maxDev = parseInt(url.searchParams.get("max")) || 1;
-        const newKey = "ZAK-" + Math.random().toString(36).substring(2, 8).toUpperCase() + "-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-        
-        const data = {
-          key: newKey,
-          expires_at: Math.floor(Date.now() / 1000) + (days * 86400),
-          max_devices: maxDev,
-          devices: [],
-          revoked: false
-        };
-        await env.ZAK_LICENSES.put(`key:${newKey}`, JSON.stringify(data));
-        return new Response(JSON.stringify({ success: true, key: newKey }), { headers: { "Content-Type": "application/json" } });
-      }
-
-      // List Keys
-      if (action === "list") {
-        const list = await env.ZAK_LICENSES.list({ prefix: "key:" });
-        let keys = [];
-        for (const k of list.keys) {
-          const raw = await env.ZAK_LICENSES.get(k.name);
-          if (raw) keys.push(JSON.parse(raw));
-        }
-        return new Response(JSON.stringify({ success: true, keys }), { headers: { "Content-Type": "application/json" } });
-      }
-
-      // Revoke / Reset / Delete
-      if (action === "revoke" || action === "reset" || action === "delete") {
-        const key = url.searchParams.get("key");
-        if (!key) return new Response(JSON.stringify({ success: false, error: "No key provided" }));
-        
-        if (action === "delete") {
-          await env.ZAK_LICENSES.delete(`key:${key}`);
-        } else {
-          const raw = await env.ZAK_LICENSES.get(`key:${key}`);
-          if (!raw) return new Response(JSON.stringify({ success: false, error: "Key not found" }));
-          const data = JSON.parse(raw);
-          
-          if (action === "revoke") data.revoked = true;
-          if (action === "reset") data.devices = [];
-          
-          await env.ZAK_LICENSES.put(`key:${key}`, JSON.stringify(data));
-        }
-        return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
-      }
+    if (!env.ZAK_LICENSES) {
+      return json({ success: false, error: "KV binding ZAK_LICENSES is missing" }, 500);
     }
 
-    // --- 2. LUA MOD VERIFICATION ROUTE ---
-    if (request.method === "POST") {
-      try {
-        const contentType = request.headers.get("content-type") || "";
-        let body = {};
-        
-        if (contentType.includes("form")) {
-          const form = await request.formData();
-          for (const [k, v] of form.entries()) body[k] = v;
-        } else {
-          body = await request.json();
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type"
         }
-
-        const game = body.game || "";
-        // Exact string without modifying case
-        const userKey = (body.user_key || "").trim(); 
-        const serial = body.serial || "";
-
-        // Basic Request Validation
-        if (game !== GAME_NAME || !userKey || !serial) {
-          return new Response(JSON.stringify({ status: false, reason: "Missing fields" }), { headers: { "Content-Type": "application/json" } });
-        }
-
-        // KV check
-        const raw = await env.ZAK_LICENSES.get(`key:${userKey}`);
-        if (!raw) {
-          return new Response(JSON.stringify({ status: false, reason: "Invalid Key" }), { headers: { "Content-Type": "application/json" } });
-        }
-
-        const keyData = JSON.parse(raw);
-        const now = Math.floor(Date.now() / 1000);
-
-        // Status checks
-        if (keyData.revoked) return new Response(JSON.stringify({ status: false, reason: "Key Revoked" }));
-        if (now > keyData.expires_at) return new Response(JSON.stringify({ status: false, reason: "Key Expired" }));
-
-        // Device Lock (HWID)
-        if (!keyData.devices.includes(serial)) {
-          if (keyData.devices.length >= keyData.max_devices) {
-            return new Response(JSON.stringify({ status: false, reason: "Max Devices Reached" }));
-          }
-          keyData.devices.push(serial);
-          await env.ZAK_LICENSES.put(`key:${userKey}`, JSON.stringify(keyData));
-        }
-
-        // Generate Token exactly as Lua script expects
-        const tokenString = `${game}-${userKey}-${serial}-${SECRET_KEY}`;
-        const token = md5(tokenString);
-
-        return new Response(JSON.stringify({
-          status: true,
-          data: {
-            token: token,
-            rng: now // Server time
-          }
-        }), { headers: { "Content-Type": "application/json" } });
-
-      } catch (error) {
-        return new Response(JSON.stringify({ status: false, reason: error.message }), { status: 500 });
-      }
+      });
     }
 
-    return new Response("Not Found", { status: 404 });
+    if (path === "/connect") return handleLua(request, env);
+
+    if (path === "/") return handleAdmin(request, env, url);
+
+    return json({ success: false, error: "Not found" }, 404);
   }
 };
